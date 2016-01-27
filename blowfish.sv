@@ -5,11 +5,11 @@ module round (
 
   // S-box interface
   input logic [31:0] S_data,
-  inout [31:0] S_addr,
+  output logic [31:0] S_addr,
 
   // P-box interface
   input logic [31:0] P_data,
-  inout [31:0] P_addr,
+  output logic [31:0] P_addr,
 
   output logic [31:0] result,
   output logic done
@@ -71,7 +71,6 @@ module round (
         nextState = WAIT;
         done = 1;
       end
-      default:
     endcase
   end
 
@@ -103,10 +102,10 @@ module round (
         end
       endcase
     end
-  end
-  else begin
-    state <= WAIT;
-    result <= 0;
+    else begin
+      state <= WAIT;
+      result <= 0;
+    end
   end
 
 endmodule: round
@@ -115,8 +114,8 @@ module encipher (
   input logic start, clk, reset_l,
   input logic [31:0] xl_in, xr_in,
   input logic [31:0] S_data, P_data,
-  inout [31:0] S_addr, P_addr,
-  output logic [31:0] xl_out, xr_out
+  output logic [31:0] S_addr, P_addr,
+  output logic [31:0] xl_out, xr_out,
   output logic done
 ); 
 
@@ -131,9 +130,10 @@ module encipher (
   logic [0:4] round_counter;
   logic [31:0] Xl, Xr;
   logic [31:0] round_feistel_in, round_p_in, round_result;
+  logic [31:0] round_S_addr, round_P_addr;
   logic round_start, round_done;
 
-  round r0 (round_start, clk, reset_l, round_feistel_in, round_p_in, S_data, S_addr, P_data, P_addr, round_result, round_done);
+  round r0 (round_start, clk, reset_l, round_feistel_in, round_p_in, S_data, round_S_addr, P_data, round_P_addr, round_result, round_done);
 
   always_comb begin
 
@@ -143,13 +143,13 @@ module encipher (
     round_start = 0;
     done = 0;
 
-    S_addr = 32'hz;
-    P_addr = 32'hz;
+    S_addr = round_S_addr;
+    P_addr = round_P_addr;
 
     case(state)
       WAIT: begin
 	if(start) begin
-	  nextState = ROUNDS;
+	  nextState = ROUND_START;
 	  P_addr = 0;
 	end
       end
