@@ -32,11 +32,8 @@ enum logic [2:0]
 {
   WAIT,
   INIT,
-  F1A,
-  F1B,
-  F2A,
-  F2B,
-  SWAP,
+  F1,
+  F2,
   XOR_P17,
   DONE
 } state, nextState;
