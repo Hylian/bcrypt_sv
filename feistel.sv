@@ -22,7 +22,7 @@ module feistel(
   output logic cs_b_l, we_b_l, oe_b_l;
 
   /* Outputs */
-  output logic [63:0] result;
+  output logic [31:0] resultl, resultr;
   output logic done;
 
   /* Internal */
@@ -121,8 +121,8 @@ module feistel(
 	  end
 	end
 	XOR_P17: begin
-	  result[63:32] <= R ^ data_a;
-	  result[31:0] <= L ^ data_b;
+	  resultl <= R ^ data_a;
+	  resultr <= L ^ data_b;
 	end
       endcase
     end
