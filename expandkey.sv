@@ -35,22 +35,41 @@ module expandKey(
   enum logic [2:0]
   {
     WAIT,
-    INIT_XOR,
+    INIT_XOR_READ,
+    INIT_XOR_LATCH,
+    INIT_XOR_WRITE,
+    XOR_PARRAY_1A,
+    XOR_PARRAY_1A_WAIT,
+    XOR_PARRAY_1B,
+    XOR_PARRAY_1B_WAIT,
+    XOR_PARRAY_2,
+    XOR_SBOX_1A,
+    XOR_SBOX_1A_WAIT,
+    XOR_SBOX_1B,
     DONE
   } state, nextState;
+
+  // Tri-state drivers for SRAM bus
+  assign data_a = data_a_out_en ? data_a_out : 32'hz;
+  assign data_b = data_b_out_en ? data_b_out : 32'hz;
 
   always_comb begin
     nextState = state;
     done = 0;
 
+    // Chip Select off by default
     cs_a_l = 1;
-    we_a_l = 1;
-    oe_a_l = 0;
-
     cs_b_l = 1;
+
+    // Write Enable off by defaut
+    we_a_l = 1;
     we_b_l = 1;
+
+    // Output Enable on by default
+    oe_a_l = 0;
     oe_b_l = 0;
 
+    // Data Bus tristates off by default
     data_a_out_en = 0;
     data_b_out_en = 0;
 
@@ -60,7 +79,9 @@ module expandKey(
 	  nextState = INIT_XOR_READ;
 	end
       end
+      /* INIT_XOR: XOR the key into the P-array (opposing endianness)*/
       INIT_XOR_READ: begin
+	// Read in the next two values from the P-array
 	nextState = INIT_XOR_LATCH;
 	cs_a_l = 0;
 	cs_b_l = 0;
@@ -68,9 +89,12 @@ module expandKey(
 	addr_b = P_ARRAY_OFFSET + init_xor_counter + 1;
       end
       INIT_XOR_LATCH: begin
+	// Compute the XOR against the key
 	nextState = INIT_XOR_WRITE;
       end
       INIT_XOR_WRITE: begin
+	// Write the values back to memory
+	// If we're about to write back to addr 16 and 17, exit loop
 	nextState = (init_xor_counter < 5'd16) ? INIT_XOR_READ : XOR_PARRAY_1A;
 	cs_a_l = 0;
 	cs_b_l = 0;
@@ -85,29 +109,37 @@ module expandKey(
 	addr_a = P_ARRAY_OFFSET + init_xor_counter;
 	addr_b = P_ARRAY_OFFSET + init_xor_counter + 1;
       end
+      /* XOR_PARRAY: run blowfish_encipher on the salt and write it to P */
       XOR_PARRAY_1A: begin
+	// Start the feistel module with top half of salt ^ data
+	// datal and datar initialized to 0
 	nextState = XOR_PARRAY_1A_WAIT;
 	feistel_datal = salt[127:96] ^ datal;
 	feistel_datar = salt[95:64] ^ datar;
 	feistel_start = 1;
       end
       XOR_PARRAY_1A_WAIT: begin
+	// Wait until module is done and latch result
 	if(feistel_done) begin
 	  nextState = XOR_PARRAY_1B;
 	end
       end
       XOR_PARRAY_1B: begin
+	// Start the feistel module with top half of salt ^ result from feistel
 	nextState = XOR_PARRAY_1B_WAIT;
 	feistel_datal = salt[63:32] ^ datal;
 	feistel_datar = salt[31:0] ^ datar;
 	feistel_start = 1;
       end
       XOR_PARRAY_1B_WAIT: begin
+	// Wait until module is done and latch result
 	if(feistel_done) begin
 	  nextState = XOR_PARRAY_2;
 	end
       end
       XOR_PARRAY_2: begin
+	// Write the results back to the P array
+	// Loop XOR_PARRAY until we've done 17 ops
 	if(xor_parray_counter < 16) begin
 	  nextState = XOR_PARRAY_1A;
 	end
@@ -127,22 +159,26 @@ module expandKey(
 	addr_a = P_ARRAY_OFFSET + xor_parray_counter;
 	addr_b = P_ARRAY_OFFSET + xor_parray_counter + 1;
       end
+      /* XOR_SBOX: run blowfish_encipher on the salt and write it to S */
       XOR_SBOX_1A: begin
+	// Start the feistel module with top half of salt ^ result from feistel
 	nextState = XOR_SBOX_1B_WAIT;
 	feistel_datal = salt[127:96] ^ datal;
 	feistel_datar = salt[63:32] ^ datar;
 	feistel_start = 1;
-
       end
       XOR_SBOX_1A_WAIT: begin
+	// Wait until module is done and latch result
 	if(feistel_done) begin
 	  nextState = XOR_SBOX_1B;
 	end
       end
       XOR_SBOX_1B: begin
+	//If we're doing the 1022+1023 writeback, we're done
 	if(xor_sbox_counter == 1022) begin
 	  nextState = DONE;
 	end
+	//Else, we keep looping
 	else begin
 	  nextState = XOR_SBOX_1A;
 	end
