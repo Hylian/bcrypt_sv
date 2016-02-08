@@ -88,6 +88,9 @@ module feistel(
 	end
       end
       XOR_P17: begin
+	nextState = DONE;
+      end
+      DONE: begin
 	nextState = WAIT;
 	done = 1;
       end
@@ -121,6 +124,7 @@ module feistel(
 	    round_counter <= round_counter + 1;
 	  end
 	end
+	// We can move this into above state to save a clock
 	XOR_P17: begin
 	  resultL <= R ^ data_a;
 	  resultR <= L ^ data_b;
