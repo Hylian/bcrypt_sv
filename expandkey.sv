@@ -15,16 +15,16 @@ module expandKey(
   input logic [127:0] salt;
 
   /* Key Interface */
-  input [7:0] logic [8] key_data; // upper level module gives us key[addr] through key[addr+7]
+  input logic [7:0] key_data [8]; // upper level module gives us key[addr] through key[addr+7]
   output logic [6:0] key_addr; // we need to address up to 72 bytes
 
   /* SRAM A Interface */
-  inout logic [31:0] data_a;
+  tri [31:0] data_a;
   output logic [11:0] addr_a;
   output logic cs_a_l, we_a_l, oe_a_l;
 
   /* SRAM B Interface */
-  inout logic [31:0] data_b;
+  tri [31:0] data_b;
   output logic [11:0] addr_b;
   output logic cs_b_l, we_b_l, oe_b_l;
 
@@ -39,6 +39,9 @@ module expandKey(
   logic [31:0] datal, datar;
   logic [4:0] init_xor_counter;
   logic [127:0] salt_latch;
+  logic [6:0] key_index;
+  logic [4:0] xor_parray_counter;
+  logic [9:0] xor_sbox_counter;
 
   /* Feistel module interface */
   logic feistel_start, feistel_done;
@@ -194,7 +197,7 @@ module expandKey(
 	  nextState = XOR_PARRAY_1A;
 	end
 	else begin
-	  nextState = XOR_SBOX_1;
+	  nextState = XOR_SBOX_1A;
 	end
 	cs_a_l = 0;
 	cs_b_l = 0;
@@ -212,7 +215,7 @@ module expandKey(
       /* XOR_SBOX: run blowfish_encipher on the salt and write it to S */
       XOR_SBOX_1A: begin
 	// Start the feistel module with top half of salt ^ result from feistel
-	nextState = XOR_SBOX_1B_WAIT;
+	nextState = XOR_SBOX_1A_WAIT;
 	feistel_L = salt_latch[127:96] ^ datal;
 	feistel_R = salt_latch[63:32] ^ datar;
 	feistel_start = 1;
@@ -252,7 +255,7 @@ module expandKey(
   end
 
   always_ff @(posedge clk) begin
-    if(~reset) begin
+    if(~reset_l) begin
       result <= 0;
       salt_latch <= 0;
     end
@@ -261,7 +264,6 @@ module expandKey(
 
       case(state)
 	WAIT: begin
-	  round_counter <= 0;
 	  init_xor_counter <= 0;
 	  if(load_salt) begin
 	    salt_latch <= salt;
@@ -313,4 +315,4 @@ module expandKey(
       endcase
     end
   end
-endmodule: expandkey
+endmodule: expandKey
