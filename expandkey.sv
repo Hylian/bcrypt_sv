@@ -1,6 +1,7 @@
 module expandKey(
-  clk, reset_l, start,
-  L, R,
+  clk, reset_l, start, load_salt,
+  L, R, salt,
+  key_data, key_addr,
   addr, data, cs, we, oe,
   result, done
 );
@@ -8,8 +9,13 @@ module expandKey(
   parameter P_ARRAY_OFFSET = 4000;
 
   /* Inputs */
-  input logic clk, reset_l, start;
+  input logic clk, reset_l, start, load_salt;
   input logic [31:0] L, R;
+  input logic [127:0] salt;
+
+  /* Key Interface */
+  input [7:0] logic [8] key_data; // upper level module gives us key[addr] through key[addr+7]
+  output logic [6:0] key_addr; // we need to address up to 72 bytes
 
   /* SRAM A Interface */
   inout logic [31:0] data_a;
@@ -31,8 +37,24 @@ module expandKey(
   logic [31:0] data_a_latch, data_b_latch;
   logic [31:0] datal, datar;
   logic [4:0] init_xor_counter;
+  logic [127:0] salt_latch;
 
-  enum logic [2:0]
+  /* Feistel module interface */
+  logic feistel_start, feistel_done;
+  logic feistel_cs_a_l, feistel_we_a_l, feistel_oe_a_l;
+  logic feistel_cs_b_l, feistel_we_b_l, feistel_oe_b_l;
+  logic [11:0] feistel_addr_a, feistel_addr_b;
+  logic [31:0] feistel_data_a, feistel_data_b;
+  logic [31:0] feistel_L, feistel_R, feistel_resultL, feistel_resultR;
+  logic feistel_sram_mux;
+
+  // Instantiate feistel module
+  feistel f1 (clk, reset_l, feistel_start, feistel_L, feistel_R, 
+	      feistel_addr_a, feistel_data_a, feistel_cs_a_l, feistel_we_a_l, feistel_oe_a_l,
+	      feistel_addr_b, feistel_data_b, feistel_cs_b_l, feistel_we_b_l, feistel_oe_b_l, 
+	      feistel_resultL, feistel_resultR, feistel_done);
+
+  enum logic [3:0]
   {
     WAIT,
     INIT_XOR_READ,
@@ -48,26 +70,49 @@ module expandKey(
     XOR_SBOX_1B,
     DONE
   } state, nextState;
-
-  // Tri-state drivers for SRAM bus
-  assign data_a = data_a_out_en ? data_a_out : 32'hz;
-  assign data_b = data_b_out_en ? data_b_out : 32'hz;
-
+ 
   always_comb begin
     nextState = state;
     done = 0;
 
-    // Chip Select off by default
-    cs_a_l = 1;
-    cs_b_l = 1;
+    // Feistel interface
+    feistel_start = 0;
+    feistel_L = 0;
+    feistel_R = 0;
 
-    // Write Enable off by defaut
-    we_a_l = 1;
-    we_b_l = 1;
+    feistel_sram_mux = 0;
 
-    // Output Enable on by default
-    oe_a_l = 0;
-    oe_b_l = 0;
+    if(feistel_sram_mux) begin
+      // Connect SRAM interface to feistel module
+      oe_a_l = feistel_oe_a_l;
+      oe_b_l = feistel_we_a_l;
+      we_a_l = feistel_we_a_l;
+      we_b_l = feistel_we_b_l;
+      cs_a_l = feistel_cs_a_l;
+      cs_b_l = feistel_cs_b_l;
+      data_a = feistel_data_a;
+      data_b = feistel_data_b;
+      addr_a = feistel_addr_a;
+      addr_b = feistel_addr_b;
+    end
+    else begin
+      // Chip Select off by default
+      cs_a_l = 1;
+      cs_b_l = 1;
+
+      // Write Enable off by defaut
+      we_a_l = 1;
+      we_b_l = 1;
+
+      // Output Enable on by default
+      oe_a_l = 0;
+      oe_b_l = 0;
+
+      // Tristate Drivers for SRAM
+      // There is an implicit mux to connect the feistel module in certain states
+      data_a = data_a_out_en ? data_a_out : 32'hz;
+      data_b = data_b_out_en ? data_b_out : 32'hz;
+    end
 
     // Data Bus tristates off by default
     data_a_out_en = 0;
@@ -90,6 +135,8 @@ module expandKey(
       end
       INIT_XOR_LATCH: begin
 	// Compute the XOR against the key
+	// Can we combine this with the next state?
+	key_addr = key_index;
 	nextState = INIT_XOR_WRITE;
       end
       INIT_XOR_WRITE: begin
@@ -114,12 +161,13 @@ module expandKey(
 	// Start the feistel module with top half of salt ^ data
 	// datal and datar initialized to 0
 	nextState = XOR_PARRAY_1A_WAIT;
-	feistel_datal = salt[127:96] ^ datal;
-	feistel_datar = salt[95:64] ^ datar;
+	feistel_L = salt_latch[127:96] ^ datal;
+	feistel_R = salt_latch[95:64] ^ datar;
 	feistel_start = 1;
       end
       XOR_PARRAY_1A_WAIT: begin
 	// Wait until module is done and latch result
+	feistel_sram_mux = 1;
 	if(feistel_done) begin
 	  nextState = XOR_PARRAY_1B;
 	end
@@ -127,12 +175,13 @@ module expandKey(
       XOR_PARRAY_1B: begin
 	// Start the feistel module with top half of salt ^ result from feistel
 	nextState = XOR_PARRAY_1B_WAIT;
-	feistel_datal = salt[63:32] ^ datal;
-	feistel_datar = salt[31:0] ^ datar;
+	feistel_L = salt_latch[63:32] ^ datal;
+	feistel_R = salt_latch[31:0] ^ datar;
 	feistel_start = 1;
       end
       XOR_PARRAY_1B_WAIT: begin
 	// Wait until module is done and latch result
+	feistel_sram_mux = 1;
 	if(feistel_done) begin
 	  nextState = XOR_PARRAY_2;
 	end
@@ -163,12 +212,13 @@ module expandKey(
       XOR_SBOX_1A: begin
 	// Start the feistel module with top half of salt ^ result from feistel
 	nextState = XOR_SBOX_1B_WAIT;
-	feistel_datal = salt[127:96] ^ datal;
-	feistel_datar = salt[63:32] ^ datar;
+	feistel_L = salt_latch[127:96] ^ datal;
+	feistel_R = salt_latch[63:32] ^ datar;
 	feistel_start = 1;
       end
       XOR_SBOX_1A_WAIT: begin
 	// Wait until module is done and latch result
+	feistel_sram_mux = 1;
 	if(feistel_done) begin
 	  nextState = XOR_SBOX_1B;
 	end
@@ -203,6 +253,7 @@ module expandKey(
   always_ff @(posedge clk) begin
     if(~reset) begin
       result <= 0;
+      salt_latch <= 0;
     end
     else begin
       state <= nextState;
@@ -211,10 +262,17 @@ module expandKey(
 	WAIT: begin
 	  round_counter <= 0;
 	  init_xor_counter <= 0;
+	  if(load_salt) begin
+	    salt_latch <= salt;
+	  end
 	end
 	INIT_XOR_LATCH: begin
-	  data_a_latch <= data_a ^ {key[key_index], key[key_index+1], key[key_index+2], key[key_index+3]};
-	  data_b_latch <= data_b ^ {key[key_index+4], key[key_index+5], key[key_index+6], key[key_index+7]};
+	  //data_a_latch <= data_a ^ {key[key_index], key[key_index+1], key[key_index+2], key[key_index+3]};
+	  //data_b_latch <= data_b ^ {key[key_index+4], key[key_index+5], key[key_index+6], key[key_index+7]};
+
+	  data_a_latch <= data_a ^ {key_data[0], key_data[1], key_data[2], key_data[3]};
+	  data_b_latch <= data_b ^ {key_data[4], key_data[5], key_data[6], key_data[7]};
+	  key_index <= key_index + 8;
 	end
 	INIT_XOR_WRITE: begin
 	  init_xor_counter <= init_xor_counter + 2;
@@ -225,14 +283,14 @@ module expandKey(
 	end
 	XOR_PARRAY_1A_WAIT: begin
 	  if(feistel_done) begin
-	    datal <= feistel_resultl;
-	    datar <= feistel_resultr;
+	    datal <= feistel_resultL;
+	    datar <= feistel_resultR;
 	  end
 	end
 	XOR_PARRAY_1B_WAIT: begin
 	  if(feistel_done) begin
-	    datal <= feistel_resultl;
-	    datar <= feistel_resultr;
+	    datal <= feistel_resultL;
+	    datar <= feistel_resultR;
 	  end
 	end
 	XOR_PARRAY_2: begin
@@ -245,7 +303,7 @@ module expandKey(
 	end
 	XOR_SBOX_1B: begin
 	  if(xor_sbox_counter == 1022) begin
-	    salt <= 0; //todo figure out what this is and if we need it
+	    salt_latch <= 0; //todo figure out what this is and if we need it
 	  end
 	  else begin
 	    xor_sbox_counter <= xor_sbox_counter + 2;
@@ -254,6 +312,4 @@ module expandKey(
       endcase
     end
   end
-
-
-endmodule: feistel
+endmodule: expandkey

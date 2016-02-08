@@ -1,8 +1,9 @@
 module feistel(
   clk, reset_l, start,
   L, R,
-  addr, data, cs, we, oe,
-  result, done
+  addr_a, data_a, cs_a_l, we_a_l, oe_a_l,
+  addr_b, data_b, cs_b_l, we_b_l, oe_b_l,
+  resultL, resultR, done
 );
 
   parameter P_ARRAY_OFFSET = 4000;
@@ -22,7 +23,7 @@ module feistel(
   output logic cs_b_l, we_b_l, oe_b_l;
 
   /* Outputs */
-  output logic [31:0] resultl, resultr;
+  output logic [31:0] resultL, resultR;
   output logic done;
 
   /* Internal */
@@ -121,8 +122,8 @@ module feistel(
 	  end
 	end
 	XOR_P17: begin
-	  resultl <= R ^ data_a;
-	  resultr <= L ^ data_b;
+	  resultL <= R ^ data_a;
+	  resultR <= L ^ data_b;
 	end
       endcase
     end
