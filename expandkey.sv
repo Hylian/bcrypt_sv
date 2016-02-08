@@ -2,7 +2,8 @@ module expandKey(
   clk, reset_l, start, load_salt,
   L, R, salt,
   key_data, key_addr,
-  addr, data, cs, we, oe,
+  addr_a, data_a, cs_a_l, we_a_l, oe_a_l,
+  addr_b, data_b, cs_b_l, we_b_l, oe_b_l,
   result, done
 );
 

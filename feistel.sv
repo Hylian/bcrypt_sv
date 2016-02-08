@@ -60,7 +60,7 @@ module feistel(
 	end
       end
       INIT: begin
-	nextState = F1A;
+	nextState = F1;
 	cs_a_l = 0;
 	cs_b_l = 0;
 	addr_a = L[31:24];
