@@ -28,6 +28,7 @@ module feistel(
 
   /* Internal */
   logic [31:0] F_r;
+  logic [3:0] round_counter;
 
   enum logic [2:0]
   {
@@ -56,7 +57,7 @@ module feistel(
 	if(start) begin
 	  nextState = INIT;
 	  cs_a_l = 0;
-	  addr = 0;
+	  addr_a = 0;
 	end
       end
       INIT: begin
@@ -98,8 +99,9 @@ module feistel(
   end
 
   always_ff @(posedge clk) begin
-    if(~reset) begin
-      result <= 0;
+    if(~reset_l) begin
+      resultL <= 0;
+      resultR <= 0;
       round_counter <= 0; //optional
       F_r <= 0; //optional
     end
@@ -111,14 +113,14 @@ module feistel(
 	  round_counter <= 0;
 	end
 	INIT: begin
-	  L <= L ^ data_a; // L ^= p[round_counter]
+	  resultL <= resultL ^ data_a; // L ^= p[round_counter]
 	end
 	F1: begin
 	  F_r <= data_a + data_b; // F_r = s[L[31:24]] + s[256+L[23:16]]
 	end
 	F2: begin
-	  R <= L;
-	  L <= R^((F_r ^ data_a) + data_b); 
+	  resultR <= resultL;
+	  resultL <= resultR^((F_r ^ data_a) + data_b); 
 	  // L = R^(((s[L[31:24]] + s[256+L[23:16]]) ^ s[512+L[15:8]) + s[768+L[7:0])
 	  if(round_counter < 15) begin
 	    round_counter <= round_counter + 1;
@@ -126,8 +128,8 @@ module feistel(
 	end
 	// We can move this into above state to save a clock
 	XOR_P17: begin
-	  resultL <= R ^ data_a;
-	  resultR <= L ^ data_b;
+	  resultL <= resultR ^ data_a;
+	  resultR <= resultL ^ data_b;
 	end
       endcase
     end
