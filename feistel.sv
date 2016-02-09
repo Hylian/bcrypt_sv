@@ -1,8 +1,8 @@
 module feistel(
   clk, reset_l, start,
   L, R,
-  data_in_a, data_out_a, addr_a, cs_a_l, we_a_l, oe_a_l,
-  data_in_b, data_out_b, addr_b, cs_b_l, we_b_l, oe_b_l,
+  data_out_a, addr_a, cs_a_l, we_a_l, oe_a_l,
+  data_out_b, addr_b, cs_b_l, we_b_l, oe_b_l,
   resultL, resultR, done
 );
 

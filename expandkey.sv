@@ -25,8 +25,8 @@ module expandKey(
   output logic cs_a_l, we_a_l, oe_a_l;
 
   /* SRAM B Interface */
-  input logic [31:0] data_out_a;
-  output logic [31:0] data_in_a;
+  input logic [31:0] data_out_b;
+  output logic [31:0] data_in_b;
   output logic [11:0] addr_b;
   output logic cs_b_l, we_b_l, oe_b_l;
 
@@ -54,8 +54,8 @@ module expandKey(
 
   // Instantiate feistel module
   feistel f1 (clk, reset_l, feistel_start, feistel_L, feistel_R, 
-	      feistel_addr_a, feistel_data_a, feistel_cs_a_l, feistel_we_a_l, feistel_oe_a_l,
-	      feistel_addr_b, feistel_data_b, feistel_cs_b_l, feistel_we_b_l, feistel_oe_b_l, 
+	      feistel_data_out_a, feistel_addr_a, feistel_cs_a_l, feistel_we_a_l, feistel_oe_a_l,
+	      feistel_data_out_b, feistel_addr_b, feistel_cs_b_l, feistel_we_b_l, feistel_oe_b_l, 
 	      feistel_resultL, feistel_resultR, feistel_done);
 
   enum logic [3:0]
@@ -148,8 +148,8 @@ module expandKey(
 	oe_b_l = 1;
 	we_a_l = 0;
 	we_b_l = 0;
-	data_in_out = data_a_reg;
-	data_in_out = data_b_reg;
+	data_in_a = data_a_reg;
+	data_in_b = data_b_reg;
 	addr_a = P_ARRAY_OFFSET + init_xor_counter;
 	addr_b = P_ARRAY_OFFSET + init_xor_counter + 1;
       end
