@@ -2,8 +2,8 @@ module expandKey(
   clk, reset_l, start, load_salt,
   L, R, salt,
   key_data, key_addr,
-  addr_a, data_a, cs_a_l, we_a_l, oe_a_l,
-  addr_b, data_b, cs_b_l, we_b_l, oe_b_l,
+  data_out_a, data_in_a, addr_a, cs_a_l, we_a_l, oe_a_l,
+  data_out_b, data_in_b, addr_b, cs_b_l, we_b_l, oe_b_l,
   result, done
 );
 
@@ -19,12 +19,14 @@ module expandKey(
   output logic [6:0] key_addr; // we need to address up to 72 bytes
 
   /* SRAM A Interface */
-  tri [31:0] data_a;
+  input logic [31:0] data_out_a;
+  output logic [31:0] data_in_a;
   output logic [11:0] addr_a;
   output logic cs_a_l, we_a_l, oe_a_l;
 
   /* SRAM B Interface */
-  tri [31:0] data_b;
+  input logic [31:0] data_out_a;
+  output logic [31:0] data_in_a;
   output logic [11:0] addr_b;
   output logic cs_b_l, we_b_l, oe_b_l;
 
@@ -33,9 +35,7 @@ module expandKey(
   output logic done;
 
   /* Internal */
-  logic [31:0] data_a_out, data_b_out;
-  logic data_a_out_en, data_b_out_en;
-  logic [31:0] data_a_latch, data_b_latch;
+  logic [31:0] data_a_reg, data_b_reg;
   logic [31:0] datal, datar;
   logic [4:0] init_xor_counter;
   logic [127:0] salt_latch;
@@ -48,7 +48,7 @@ module expandKey(
   logic feistel_cs_a_l, feistel_we_a_l, feistel_oe_a_l;
   logic feistel_cs_b_l, feistel_we_b_l, feistel_oe_b_l;
   logic [11:0] feistel_addr_a, feistel_addr_b;
-  logic [31:0] feistel_data_a, feistel_data_b;
+  logic [31:0] feistel_data_out_a, feistel_data_out_b;
   logic [31:0] feistel_L, feistel_R, feistel_resultL, feistel_resultR;
   logic feistel_sram_mux;
 
@@ -94,12 +94,13 @@ module expandKey(
       we_b_l = feistel_we_b_l;
       cs_a_l = feistel_cs_a_l;
       cs_b_l = feistel_cs_b_l;
-      data_a = feistel_data_a;
-      data_b = feistel_data_b;
+      feistel_data_out_a = data_out_a;
+      feistel_data_out_b = data_out_b;
       addr_a = feistel_addr_a;
       addr_b = feistel_addr_b;
     end
     else begin
+      // Connect SRAM interface to this module
       // Chip Select off by default
       cs_a_l = 1;
       cs_b_l = 1;
@@ -111,16 +112,10 @@ module expandKey(
       // Output Enable on by default
       oe_a_l = 0;
       oe_b_l = 0;
-
-      // Tristate Drivers for SRAM
-      // There is an implicit mux to connect the feistel module in certain states
-      data_a = data_a_out_en ? data_a_out : 32'hz;
-      data_b = data_b_out_en ? data_b_out : 32'hz;
     end
 
-    // Data Bus tristates off by default
-    data_a_out_en = 0;
-    data_b_out_en = 0;
+    data_in_a = 0;
+    data_in_b = 0;
 
     case(state)
       WAIT: begin
@@ -153,10 +148,8 @@ module expandKey(
 	oe_b_l = 1;
 	we_a_l = 0;
 	we_b_l = 0;
-	data_a_out = data_a_latch;
-	data_b_out = data_b_latch;
-	data_a_out_en = 1;
-	data_b_out_en = 1;
+	data_in_out = data_a_reg;
+	data_in_out = data_b_reg;
 	addr_a = P_ARRAY_OFFSET + init_xor_counter;
 	addr_b = P_ARRAY_OFFSET + init_xor_counter + 1;
       end
@@ -205,10 +198,8 @@ module expandKey(
 	oe_b_l = 1;
 	we_a_l = 0;
 	we_b_l = 0;
-	data_a_out = datal;
-	data_b_out = datar;
-	data_a_out_en = 1;
-	data_b_out_en = 1;
+	data_in_a = datal;
+	data_in_b = datar;
 	addr_a = P_ARRAY_OFFSET + xor_parray_counter;
 	addr_b = P_ARRAY_OFFSET + xor_parray_counter + 1;
       end
@@ -243,10 +234,8 @@ module expandKey(
 	oe_b_l = 1;
 	we_a_l = 0;
 	we_b_l = 0;
-	data_a_out = datal;
-	data_b_out = datar;
-	data_a_out_en = 1;
-	data_b_out_en = 1;
+	data_in_a = datal;
+	data_in_b = datar;
 	addr_a = xor_sbox_counter;
 	addr_b = xor_sbox_counter + 1;
       end
@@ -270,11 +259,11 @@ module expandKey(
 	  end
 	end
 	INIT_XOR_LATCH: begin
-	  //data_a_latch <= data_a ^ {key[key_index], key[key_index+1], key[key_index+2], key[key_index+3]};
-	  //data_b_latch <= data_b ^ {key[key_index+4], key[key_index+5], key[key_index+6], key[key_index+7]};
+	  //data_a_reg <= data_a ^ {key[key_index], key[key_index+1], key[key_index+2], key[key_index+3]};
+	  //data_b_reg <= data_b ^ {key[key_index+4], key[key_index+5], key[key_index+6], key[key_index+7]};
 
-	  data_a_latch <= data_a ^ {key_data[0], key_data[1], key_data[2], key_data[3]};
-	  data_b_latch <= data_b ^ {key_data[4], key_data[5], key_data[6], key_data[7]};
+	  data_a_reg <= data_out_a ^ {key_data[0], key_data[1], key_data[2], key_data[3]};
+	  data_b_reg <= data_out_b ^ {key_data[4], key_data[5], key_data[6], key_data[7]};
 	  key_index <= key_index + 8;
 	end
 	INIT_XOR_WRITE: begin

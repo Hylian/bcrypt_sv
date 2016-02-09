@@ -1,8 +1,8 @@
 module feistel(
   clk, reset_l, start,
   L, R,
-  addr_a, data_in_a, data_out_a, cs_a_l, we_a_l, oe_a_l,
-  addr_b, data_in_b, data_out_b, cs_b_l, we_b_l, oe_b_l,
+  data_in_a, data_out_a, addr_a, cs_a_l, we_a_l, oe_a_l,
+  data_in_b, data_out_b, addr_b, cs_b_l, we_b_l, oe_b_l,
   resultL, resultR, done
 );
 
@@ -13,12 +13,12 @@ module feistel(
   input logic [31:0] L, R;
 
   /* SRAM A Interface */
-  input logic [31:0] data_a;
+  input logic [31:0] data_out_a;
   output logic [11:0] addr_a;
   output logic cs_a_l, we_a_l, oe_a_l;
 
   /* SRAM B Interface */
-  input logic [31:0] data_b;
+  input logic [31:0] data_out_b;
   output logic [11:0] addr_b;
   output logic cs_b_l, we_b_l, oe_b_l;
 
@@ -113,14 +113,14 @@ module feistel(
 	  round_counter <= 0;
 	end
 	INIT: begin
-	  resultL <= resultL ^ data_a; // L ^= p[round_counter]
+	  resultL <= resultL ^ data_out_a; // L ^= p[round_counter]
 	end
 	F1: begin
-	  F_r <= data_a + data_b; // F_r = s[L[31:24]] + s[256+L[23:16]]
+	  F_r <= data_out_a + data_out_b; // F_r = s[L[31:24]] + s[256+L[23:16]]
 	end
 	F2: begin
 	  resultR <= resultL;
-	  resultL <= resultR^((F_r ^ data_a) + data_b); 
+	  resultL <= resultR^((F_r ^ data_out_a) + data_out_b); 
 	  // L = R^(((s[L[31:24]] + s[256+L[23:16]]) ^ s[512+L[15:8]) + s[768+L[7:0])
 	  if(round_counter < 15) begin
 	    round_counter <= round_counter + 1;
@@ -128,8 +128,8 @@ module feistel(
 	end
 	// We can move this into above state to save a clock
 	XOR_P17: begin
-	  resultL <= resultR ^ data_a;
-	  resultR <= resultL ^ data_b;
+	  resultL <= resultR ^ data_out_a;
+	  resultR <= resultL ^ data_out_b;
 	end
       endcase
     end
