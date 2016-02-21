@@ -34,15 +34,6 @@ module xorer (A, B, result);
   assign result = A ^ B;
 endmodule: xorer
 
-module xorer (A, B, result);
-  parameter WIDTH = 32;
-
-  input logic [WIDTH-1:0] A, B;
-  output logic [WIDTH-1:0] result;
-
-  assign result = A ^ B;
-endmodule: xorer
-
 module xorer3 (A, B, C, result);
   parameter WIDTH = 32;
 
@@ -74,5 +65,6 @@ module mux3to1 (sel, A, B, C, out);
       0: out = A;
       1: out = B;
       2: out = C;
+    endcase
   end
-endmodule: mux2to1
+endmodule: mux3to1
