@@ -13,14 +13,9 @@ module feistel(
   input logic [31:0] L, R;
 
   /* SRAM A Interface */
-  input logic [31:0] data_out_a;
-  output logic [11:0] addr_a;
-  output logic cs_a_l, we_a_l, oe_a_l;
-
-  /* SRAM B Interface */
-  input logic [31:0] data_out_b;
-  output logic [11:0] addr_b;
-  output logic cs_b_l, we_b_l, oe_b_l;
+  input logic [31:0] data_out;
+  output logic [11:0] addr;
+  output logic cs_l, we_l, oe_l;
 
   /* Outputs */
   output logic [31:0] resultL, resultR;
