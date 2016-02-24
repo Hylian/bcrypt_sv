@@ -22,10 +22,10 @@ module feistel(
   output logic [31:0] resultL, resultR;
   output logic done;
 
-  enum logic [2:0]
+  enum logic [3:0]
   {
     WAIT,
-    XOR_P0_WAIT0
+    XOR_P0_WAIT0,
     XOR_P0_WAIT1,
     FR_INIT,
     FR_WAIT,
@@ -50,17 +50,17 @@ module feistel(
   adder #(32) a2 (x1_out, s4_out, a2_out);
   mux2to1 #(32) m_add (m_add_sel, 0, a2_out, m_add_out);
   mux2to1 #(32) m_xor (m_xor_sel, r_L_out, r_R_out, m_xor_out);
-  xorer3 #(32) x2 (m_add_out, p_array_out, m_xor_out, x2_out);
+  xorer3 #(32) x2 (m_add_out, p_out, m_xor_out, x2_out);
 
   mux3to1 #(32) m_L (m_L_sel, r_L_out, L, x2_out, m_L_out);
   mux3to1 #(32) m_R (m_R_sel, r_R_out, R, r_L_out, m_R_out);
 
   register #(32) r_L (clk, reset_l, m_L_out, r_L_out);
-  register #(32) r_R (clk, reset_l, m_r_out, r_R_out);
+  register #(32) r_R (clk, reset_l, m_R_out, r_R_out);
 
   register #(5) r_round (clk, r_round_reset_l, m_round_out, r_round_out);
-  adder #(5) a_round (r_round_out, 1, a_round_out);
-  mux2to1 #(32) m_round (m_round_sel, r_round_out, a_round_out, m_round_out);
+  adder #(5) a_round (r_round_out, 5'h1, a_round_out);
+  mux2to1 #(5) m_round (m_round_sel, r_round_out, a_round_out, m_round_out);
 
   always_comb begin
     nextState = state;
